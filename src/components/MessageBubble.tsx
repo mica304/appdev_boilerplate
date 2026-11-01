@@ -7,16 +7,14 @@ import type { MessageRow } from '../db/messages';
 import { useTheme } from '../theme';
 import { AudioChip } from './AudioChip';
 import { MarkdownText } from './MarkdownText';
-import { TypingDots } from './TypingDots';
+import { ThinkingPill } from './ThinkingPill';
 
 interface Props {
   message: MessageRow;
-  /** Label shown while a pending message has no content yet. */
-  pendingLabel?: string;
   onRetry?: (message: MessageRow) => void;
 }
 
-export function MessageBubble({ message, pendingLabel, onRetry }: Props) {
+export function MessageBubble({ message, onRetry }: Props) {
   const theme = useTheme();
   const reduceMotion = useReduceMotion();
   const isUser = message.role === 'user';
@@ -105,16 +103,7 @@ export function MessageBubble({ message, pendingLabel, onRetry }: Props) {
             )
           )}
           {showPendingDots && (
-            <View style={styles.pendingRow}>
-              <TypingDots color={theme.textSecondary} />
-              {pendingLabel && pendingLabel !== 'Generating...' && (
-                <Text
-                  style={{ color: theme.textSecondary, fontStyle: 'italic' }}
-                >
-                  {pendingLabel}
-                </Text>
-              )}
-            </View>
+            <ThinkingPill />
           )}
           {message.status === 'error' && (
             <View style={styles.errorBlock}>
@@ -172,7 +161,6 @@ const styles = StyleSheet.create({
   bubbleUser: { borderBottomRightRadius: 4 },
   bubbleAssistant: { borderTopLeftRadius: 4 },
   image: { width: 200, height: 200, borderRadius: 12 },
-  pendingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   errorBlock: { marginTop: 6, gap: 4 },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   retry: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 5, borderRadius: 8, paddingHorizontal: 10, minHeight: 44, paddingVertical: 6 },

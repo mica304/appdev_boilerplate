@@ -28,6 +28,24 @@ export async function pickImage(): Promise<string | null> {
   return toDataUrl(result.assets[0].uri);
 }
 
+/** Pick and persist a square profile photo as a data URL on web. */
+export async function pickProfilePhoto(): Promise<string | null> {
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsEditing: true,
+    aspect: [1, 1],
+    quality: 0.8,
+    base64: true,
+  });
+  if (result.canceled || result.assets.length === 0) return null;
+  const asset = result.assets[0];
+  if (!asset.base64) throw new Error('The selected photo could not be saved.');
+  return `data:${asset.mimeType ?? 'image/jpeg'};base64,${asset.base64}`;
+}
+
+/** Data URLs are stored with settings and need no separate file cleanup. */
+export async function deleteProfilePhoto(_uri: string | null): Promise<void> {}
+
 /**
  * Store a finished voice recording as a data URL. Keeps the browser's
  * real mime type (audio/webm, audio/ogg...), which Gemini accepts.

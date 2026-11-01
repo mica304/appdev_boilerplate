@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter, type Href } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import React, {
   useCallback,
   useEffect,
@@ -10,6 +10,7 @@ import React, {
 import {
   FlatList,
   KeyboardAvoidingView,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -17,14 +18,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getProvider } from '@/ai';
 import {
-  LOCAL_CONTEXT_TOKENS,
   releaseLocalConversation,
 } from '@/ai/local';
-import type { ChatMessage, ContextUsage } from '@/ai/types';
+import type { ChatMessage } from '@/ai/types';
 import { pickImage } from '@/attachments/files';
 import { Banner } from '@/components/Banner';
 import { ChatInput } from '@/components/ChatInput';
-import { ContextRing } from '@/components/ContextRing';
 import { IconButton } from '@/components/Button';
 import { SmoothPressable } from '@/components/SmoothPressable';
 import { MessageBubble } from '@/components/MessageBubble';
@@ -55,33 +54,30 @@ const DB_WRITE_THROTTLE_MS = 500;
 /** The app has a single chat; all messages belong to this conversation. */
 const id = 'main';
 
-type IconName = React.ComponentProps<typeof Ionicons>['name'];
-
-/** Starter prompts shown on an empty chat. Edit these for your app. */
-export const SUGGESTIONS: { icon: IconName; label: string; prompt: string }[] = [
-  { icon: 'bulb-outline', label: 'Explain a topic', prompt: 'Explain photosynthesis in simple terms.' },
-  { icon: 'help-circle-outline', label: 'Quiz me', prompt: 'Give me a 5-question quiz about world geography.' },
-  { icon: 'calendar-outline', label: 'Plan my study week', prompt: 'Help me make a study plan for this week.' },
-  { icon: 'create-outline', label: 'Improve my writing', prompt: 'Help me improve this paragraph: ' },
+export const SUGGESTIONS: { label: string; prompt: string }[] = [
+  { label: 'Plan my priorities', prompt: 'Help me plan my priorities for today. Ask what I need to get done, then make a realistic schedule.' },
+  { label: 'Check my habits', prompt: 'Help me review my habits for today. Ask what I have completed and encourage me to choose one next step.' },
+  { label: 'What is my next task?', prompt: 'Help me identify the best next task to work on today.' },
 ];
 
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const router = useRouter();
+  const { prompt } = useLocalSearchParams<{ prompt?: string }>();
   const { settings, ready } = useSettings();
   const { problem, modelStatus } = useAiStatus();
 
   const [messages, setMessages] = useState<MessageRow[]>([]);
+  const messagesListRef = useRef<FlatList<MessageRow>>(null);
   const [input, setInput] = useState('');
+  const draft = typeof prompt === 'string' ? prompt : input;
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const [pendingAudio, setPendingAudio] = useState<{
     uri: string;
     durationMs: number;
   } | null>(null);
   const [generating, setGenerating] = useState(false);
-  // Real token usage reported by the provider after its last reply.
-  const [reported, setReported] = useState<{ provider: string; usage: ContextUsage } | null>(null);
   // Model "Auto" routed the last reply to (cloud only).
   const [lastModel, setLastModel] = useState<string | null>(null);
   const voice = useVoiceRecorder();
@@ -112,7 +108,6 @@ export default function ChatScreen() {
           })
         );
         setMessages(fixed);
-        if (fixed.length === 0) setReported(null); // chat was cleared
       })();
     }, [])
   );
@@ -157,7 +152,6 @@ export default function ChatScreen() {
           systemPrompt: buildSystemPrompt(settings),
           signal: controller.signal,
           conversationId: id,
-          onContext: (usage) => setReported({ provider: provider.id, usage }),
           onModel: (m) => setLastModel(m),
           onReset: () => {
             if (streamTimer) clearTimeout(streamTimer);
@@ -237,10 +231,11 @@ export default function ChatScreen() {
   }, [voice.recording, voice.durationMs, finishRecording]);
 
   const send = useCallback(async () => {
-    const text = input.trim();
+    const text = draft.trim();
     const image = pendingImage;
     const audio = pendingAudio;
     if ((!text && !image && !audio) || !provider || generating) return;
+    if (typeof prompt === 'string') router.setParams({ prompt: undefined });
     setGenerating(true);
     await ensureConversation(id);
 
@@ -292,7 +287,7 @@ export default function ChatScreen() {
       },
     ];
     await runGeneration(assistantRow, history);
-  }, [input, pendingImage, pendingAudio, provider, generating, messages, runGeneration]);
+  }, [draft, pendingImage, pendingAudio, provider, generating, messages, prompt, router, runGeneration]);
 
   const retry = useCallback(
     async (row: MessageRow) => {
@@ -333,11 +328,14 @@ export default function ChatScreen() {
       setMessages([]);
       setPendingImage(null);
       setPendingAudio(null);
-      setReported(null);
     });
   }, []);
 
   const openSettings = () => router.push('/chat-settings' as Href);
+  const chooseSuggestion = (suggestion: string) => {
+    if (typeof prompt === 'string') router.setParams({ prompt: undefined });
+    setInput(suggestion);
+  };
 
   // ── Banner / send gating ────────────────────────────────────────────────
   const banner = problem ? (
@@ -349,28 +347,6 @@ export default function ChatScreen() {
   ) : null;
   const sendDisabled = problem !== null;
 
-  // Prefer the provider's real count; until one arrives, estimate ~4 chars per token.
-  const context: ContextUsage =
-    reported && reported.provider === provider?.id
-      ? reported.usage
-      : {
-          // A fresh chat means an empty memory, so nothing is used yet.
-          usedTokens:
-            messages.length === 0
-              ? 0
-              : Math.ceil(
-                  (buildSystemPrompt(settings).length +
-                    messages.reduce((n, m) => n + m.content.length, 0)) / 4
-                ),
-          maxTokens: provider?.id === 'local' ? LOCAL_CONTEXT_TOKENS : undefined,
-          estimated: true,
-        };
-
-  const pendingLabel =
-    provider?.id === 'local' && modelStatus.state !== 'loaded'
-      ? 'Loading model...'
-      : 'Generating...';
-
   // Status dot + line under the title: green when ready, amber while the
   // local model is loading/downloading, red otherwise.
   const providerLabel =
@@ -381,85 +357,85 @@ export default function ChatScreen() {
       : 'Local AI';
   const modelLoading =
     problem === 'Loading the local model...' || modelStatus.state === 'loading';
-  let statusColor = theme.danger;
   let statusText = `${providerLabel} · not ready`;
+  let statusColor = theme.danger;
   if (problem === null) {
-    statusColor = theme.success;
     statusText = providerLabel;
+    statusColor = theme.success;
   } else if (modelLoading || modelStatus.state === 'downloading') {
-    statusColor = theme.warning;
     statusText = modelLoading ? 'Loading model...' : `${providerLabel} · not ready`;
+    statusColor = theme.warning;
   }
 
   return (
     <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={insets.top} style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={[styles.topBar, { borderBottomColor: theme.border }]}>
-        <IconButton icon="chevron-back" label="Back to Home" onPress={() => router.navigate('/' as Href)} />
-        <View style={styles.flex}>
-          <Text style={[styles.title, { color: theme.text }]}>AI Chat</Text>
-          <View style={styles.statusRow}>
-            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-            <Text numberOfLines={1} style={{ color: theme.textSecondary, fontSize: 12 }}>
-              {statusText}
-            </Text>
+        <IconButton icon="chevron-back" label="Back to Home" onPress={() => router.navigate('/' as Href)} style={styles.chatHeaderIcon} />
+        <View style={styles.avatarWrap} accessibilityLabel={`Nova AI status: ${statusText}`}>
+          <View style={[styles.avatar, { backgroundColor: theme.buttonSecondary }]}>
+            <Ionicons name="hardware-chip-outline" size={18} color={theme.text} />
           </View>
+          <View style={[styles.statusDot, { backgroundColor: statusColor, borderColor: theme.background }]} />
         </View>
-        <ContextRing usage={context} theme={theme} />
-        <IconButton icon="trash-outline" label="Clear chat" onPress={clearChat} disabled={generating || messages.length === 0} />
-        <IconButton icon="settings-outline" label="Chat settings" onPress={openSettings} />
+        <View style={styles.flex}>
+          <View style={styles.titleRow}>
+            <Text style={[styles.title, { color: theme.text }]}>Nova AI</Text>
+            <View style={[styles.previewBadge, { backgroundColor: theme.buttonSecondary }]}><Text style={[styles.previewText, { color: theme.textSecondary }]}>PREVIEW</Text></View>
+          </View>
+          <Text numberOfLines={1} style={[styles.assistantSubtitle, { color: theme.textSecondary }]}>Daily planning assistant</Text>
+        </View>
+        <IconButton icon="refresh-outline" label="Clear chat" onPress={clearChat} disabled={generating || messages.length === 0} style={styles.chatHeaderIcon} />
       </View>
       {banner}
       {messages.length === 0 ? (
         <View style={styles.empty}>
-          <View style={[styles.emptyAvatar, { backgroundColor: theme.buttonPrimary }]}>
-            <Ionicons name="sparkles" size={30} color="#FFF" />
+          <View style={[styles.welcomeBubble, { backgroundColor: theme.assistantBubble, borderColor: theme.border }]}>
+            <Text style={[styles.welcomeText, { color: theme.text }]}>
+              Hello! I am Nova, your Planova planning assistant. How can I help you plan your schedule, review habits, or structure your day?
+            </Text>
           </View>
-          <Text style={[styles.emptyTitle, { color: theme.text }]}>
-            Hi {settings.nickname || 'there'}, how can I help?
-          </Text>
-          <Text style={[styles.emptySub, { color: theme.textSecondary }]}>
-            Ask anything. Your chat is saved on this device.
-          </Text>
-          <View style={styles.chips}>
-            {SUGGESTIONS.map((s) => (
-              <SmoothPressable
-                key={s.label}
-                disabled={problem !== null}
-                onPress={() => setInput(s.prompt)}
-                style={[
-                  styles.chip,
-                  { backgroundColor: theme.buttonSecondary, borderColor: theme.buttonSecondary },
-                  problem !== null && styles.chipDisabled,
-                ]}
-              >
-                <Ionicons name={s.icon} size={18} color={theme.tint} />
-                <Text style={{ color: theme.text, fontSize: 14, fontWeight: '500' }}>
-                  {s.label}
-                </Text>
-              </SmoothPressable>
-            ))}
+          <Text style={[styles.welcomeTime, { color: theme.textSecondary }]}>Just now</Text>
+          <View style={styles.emptySpacer} />
+          <View style={[styles.suggestionBar, { borderColor: theme.border }]}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.chips}>
+              {SUGGESTIONS.map((suggestion) => (
+                <SmoothPressable
+                  key={suggestion.label}
+                  disabled={problem !== null}
+                  onPress={() => chooseSuggestion(suggestion.prompt)}
+                  style={[styles.chip, { backgroundColor: theme.buttonSecondary }, problem !== null && styles.chipDisabled]}
+                >
+                  <Text numberOfLines={1} style={{ color: theme.text, fontSize: 9, fontWeight: '600' }}>{suggestion.label}</Text>
+                </SmoothPressable>
+              ))}
+            </ScrollView>
           </View>
         </View>
       ) : (
         <FlatList
-          inverted
+          ref={messagesListRef}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          data={[...messages].reverse()}
+          data={messages}
           keyExtractor={(m) => m.id}
           contentContainerStyle={styles.list}
+          onContentSizeChange={() => messagesListRef.current?.scrollToEnd({ animated: false })}
           renderItem={({ item }) => (
             <MessageBubble
               message={item}
-              pendingLabel={pendingLabel}
               onRetry={item.role === 'assistant' ? retry : undefined}
             />
           )}
         />
       )}
       <ChatInput
-        value={input}
-        onChange={setInput}
+        value={draft}
+        placeholder="Ask Nova about your day..."
+        showTools={false}
+        onChange={(value) => {
+          if (typeof prompt === 'string') router.setParams({ prompt: undefined });
+          setInput(value);
+        }}
         onSend={() => { void send().catch((error) => { setGenerating(false); showMessage('Unable to send message', error instanceof Error ? error.message : 'Please try again.'); }); }}
         onStop={stop}
         disabled={sendDisabled}
@@ -487,45 +463,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  title: { fontSize: 18, fontWeight: '700' },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  chatHeaderIcon: { width: 36, height: 36, borderRadius: 18 },
+  avatarWrap: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 31, height: 31, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  statusDot: { position: 'absolute', right: 0, bottom: 1, width: 9, height: 9, borderRadius: 5, borderWidth: 1.5 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  title: { fontSize: 15, fontWeight: '700' },
+  previewBadge: { borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3 },
+  previewText: { fontSize: 8, fontWeight: '700' },
+  assistantSubtitle: { fontSize: 10, fontWeight: '500', marginTop: 2 },
   empty: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingTop: 14,
+    paddingBottom: 8,
   },
-  emptyAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  emptyTitle: { fontSize: 20, fontWeight: '700', textAlign: 'center' },
-  emptySub: { fontSize: 14, marginTop: 6, textAlign: 'center' },
+  welcomeBubble: { alignSelf: 'flex-start', maxWidth: '84%', borderWidth: StyleSheet.hairlineWidth, borderRadius: 20, borderTopLeftRadius: 5, paddingHorizontal: 13, paddingVertical: 10, marginHorizontal: 14 },
+  welcomeText: { fontSize: 12, lineHeight: 18 },
+  welcomeTime: { fontSize: 8, marginTop: 5, marginHorizontal: 17 },
+  emptySpacer: { flex: 1 },
+  suggestionBar: { borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 6 },
   chips: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 20,
+    flexGrow: 1,
+    justifyContent: 'space-between',
+    gap: 6,
+    paddingHorizontal: 14,
   },
   chip: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
+    minHeight: 27,
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    justifyContent: 'center',
   },
   chipDisabled: { opacity: 0.5 },
-  list: { paddingVertical: 12 },
+  list: { paddingTop: 12, paddingBottom: 12 },
 });

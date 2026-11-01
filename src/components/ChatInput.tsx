@@ -20,6 +20,8 @@ interface Props {
   onStop?: () => void;
   disabled?: boolean;
   generating?: boolean;
+  placeholder?: string;
+  showTools?: boolean;
   /** Local URI of the staged image attachment. */
   imageUri?: string | null;
   /** When given, an attach-image button is shown beside the input. */
@@ -51,6 +53,8 @@ export function ChatInput({
   onStop,
   disabled,
   generating,
+  placeholder,
+  showTools = true,
   imageUri,
   onPickImage,
   onRemoveImage,
@@ -69,8 +73,7 @@ export function ChatInput({
     !recording &&
     (value.trim().length > 0 || !!imageUri || !!audio);
   const dimmed = disabled || generating;
-  const showMic =
-    !!onStartRecording && !audio;
+  const showMic = showTools && !!onStartRecording && !audio;
 
   return (
     <View
@@ -132,7 +135,7 @@ export function ChatInput({
         </View>
       )}
       <View style={styles.inputRow}>
-        {!recording && onPickImage && <IconButton icon="attach-outline" label="Attach image" onPress={onPickImage} disabled={dimmed} style={styles.toolButton} />}
+        {showTools && !recording && onPickImage && <IconButton icon="attach-outline" label="Attach image" onPress={onPickImage} disabled={dimmed} style={styles.toolButton} />}
 
         <View
           style={[
@@ -174,9 +177,9 @@ export function ChatInput({
                 placeholder={
                   disabled
                     ? 'Message…'
-                    : imageUri || audio
+                    : placeholder ?? (imageUri || audio
                       ? 'Add a message…'
-                      : 'Message…'
+                      : 'Message…')
                 }
                 placeholderTextColor={theme.textSecondary}
                 value={value}
@@ -230,7 +233,7 @@ export function ChatInput({
               { backgroundColor: canSend ? theme.buttonPrimary : theme.buttonSecondary },
             ]}
           >
-            <Ionicons name="arrow-up" size={22} color={canSend ? '#FFFFFF' : theme.textSecondary} />
+            <Ionicons name="paper-plane-outline" size={20} color={canSend ? '#FFFFFF' : theme.textSecondary} />
           </SmoothPressable>
         )}
       </View>
@@ -308,7 +311,8 @@ function AudioPreview({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingTop: 8,
+    paddingBottom: 18,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   tray: {

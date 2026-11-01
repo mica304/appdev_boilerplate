@@ -3,8 +3,11 @@ import { useSettings } from '@/settings/SettingsContext';
 export interface Theme {
   background: string;
   card: string;
+  surfaceRaised: string;
+  divider: string;
   text: string;
   textSecondary: string;
+  muted: string;
   border: string;
   tint: string;
   buttonPrimary: string;
@@ -13,6 +16,7 @@ export interface Theme {
   danger: string;
   success: string;
   warning: string;
+  statusBar: 'light-content' | 'dark-content';
   userBubble: string;
   userBubbleText: string;
   assistantBubble: string;
@@ -20,41 +24,49 @@ export interface Theme {
 }
 
 const light: Theme = {
-  background: '#FFFFFF',
-  card: '#F2F2F7',
-  text: '#111111',
-  textSecondary: '#6B6B70',
-  border: '#D8D8DE',
-  tint: '#0066CC',
-  buttonPrimary: '#0066CC',
-  buttonSecondary: '#E6E8EE',
-  buttonDanger: '#BA2525',
-  danger: '#B42323',
-  success: '#2E7D32',
-  warning: '#A14800',
-  userBubble: '#0066CC',
-  userBubbleText: '#FFFFFF',
-  assistantBubble: '#E9E9EE',
-  inputBackground: '#F2F2F7',
+  background: '#F3F7F2',
+  card: '#FFFFFF',
+  surfaceRaised: '#E8F0E8',
+  divider: '#DFE8DF',
+  text: '#17261B',
+  textSecondary: '#526657',
+  muted: '#748477',
+  border: '#D5E1D6',
+  tint: '#347A4B',
+  buttonPrimary: '#347A4B',
+  buttonSecondary: '#E5EEE5',
+  buttonDanger: '#B5483F',
+  danger: '#B5483F',
+  success: '#347A4B',
+  warning: '#8A6500',
+  statusBar: 'dark-content',
+  userBubble: '#347A4B',
+  userBubbleText: '#F2FFF2',
+  assistantBubble: '#E8F0E8',
+  inputBackground: '#FFFFFF',
 };
 
 const dark: Theme = {
-  background: '#0E0E12',
-  card: '#1C1C22',
-  text: '#F2F2F5',
-  textSecondary: '#9A9AA3',
-  border: '#2E2E38',
-  tint: '#70B7FF',
-  buttonPrimary: '#0A65C7',
-  buttonSecondary: '#303038',
-  buttonDanger: '#BA2525',
-  danger: '#FF8885',
-  success: '#66BB6A',
-  warning: '#FFA726',
-  userBubble: '#1C6FD1',
-  userBubbleText: '#FFFFFF',
-  assistantBubble: '#23232C',
-  inputBackground: '#1C1C22',
+  background: '#050806',
+  card: 'rgba(15, 39, 27, 0.96)',
+  surfaceRaised: 'rgba(35, 72, 48, 0.88)',
+  divider: 'rgba(147, 190, 151, 0.18)',
+  text: '#EDF5EC',
+  textSecondary: '#A4BAA8',
+  muted: '#78917E',
+  border: 'rgba(137, 183, 143, 0.22)',
+  tint: '#80C98A',
+  buttonPrimary: '#347A4B',
+  buttonSecondary: 'rgba(35, 72, 48, 0.88)',
+  buttonDanger: '#873E36',
+  danger: '#F08B7D',
+  success: '#80C98A',
+  warning: '#BBCB79',
+  statusBar: 'light-content',
+  userBubble: '#286441',
+  userBubbleText: '#F2FFF2',
+  assistantBubble: 'rgba(17, 43, 30, 0.94)',
+  inputBackground: 'rgba(12, 34, 23, 0.96)',
 };
 
 export function useTheme(): Theme {

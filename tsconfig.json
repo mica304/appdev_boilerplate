@@ -14,5 +14,9 @@
   "include": [
     "**/*.ts",
     "**/*.tsx"
+  ],
+  "exclude": [
+    "Documents",
+    "node_modules"
   ]
 }

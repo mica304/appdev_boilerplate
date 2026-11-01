@@ -39,7 +39,7 @@ export function AudioChip({ uri, isUser }: { uri: string; isUser: boolean }) {
           status.playing ? 'Pause voice message' : 'Play voice message'
         }
         hitSlop={10}
-        style={[styles.button, { backgroundColor: isUser ? '#004A99' : theme.buttonPrimary }]}
+        style={[styles.button, { backgroundColor: isUser ? theme.userBubble : theme.buttonPrimary }]}
       >
         <Ionicons
           name={status.playing ? 'pause' : 'play'}

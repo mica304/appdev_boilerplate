@@ -14,6 +14,7 @@ const KEYS = {
   nickname: 'nickname',
   onboarded: 'onboarded',
   theme: 'theme',
+  profilePhotoUri: 'profilePhotoUri',
   modelResumeData: 'modelResumeData',
 } as const;
 
@@ -32,6 +33,7 @@ export interface Settings {
   nickname: string;
   onboarded: boolean;
   theme: ThemeMode;
+  profilePhotoUri: string | null;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -42,11 +44,12 @@ export const DEFAULT_SETTINGS: Settings = {
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
   nickname: '',
   onboarded: false,
-  theme: 'light',
+  theme: 'dark',
+  profilePhotoUri: null,
 };
 
 export async function loadSettings(): Promise<Settings> {
-  const [provider, geminiModel, localBackend, systemPrompt, nickname, onboarded, theme, apiKey] =
+  const [provider, geminiModel, localBackend, systemPrompt, nickname, onboarded, theme, profilePhotoUri, apiKey] =
     await Promise.all([
       Storage.getItem(KEYS.provider),
       Storage.getItem(KEYS.geminiModel),
@@ -55,6 +58,7 @@ export async function loadSettings(): Promise<Settings> {
       Storage.getItem(KEYS.nickname),
       Storage.getItem(KEYS.onboarded),
       Storage.getItem(KEYS.theme),
+      Storage.getItem(KEYS.profilePhotoUri),
       Platform.OS === 'web'
         ? Promise.resolve(typeof sessionStorage === 'undefined' ? null : sessionStorage.getItem(API_KEY_KEY))
         : SecureStore.getItemAsync(API_KEY_KEY),
@@ -70,7 +74,8 @@ export async function loadSettings(): Promise<Settings> {
     systemPrompt: systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
     nickname: nickname ?? '',
     onboarded: onboarded === 'true',
-    theme: theme === 'dark' ? 'dark' : 'light',
+    theme: theme === 'light' ? 'light' : 'dark',
+    profilePhotoUri: profilePhotoUri || null,
   };
 }
 
@@ -106,6 +111,9 @@ export async function saveSetting<K extends keyof Settings>(
       return Storage.setItemAsync(KEYS.onboarded, String(value));
     case 'theme':
       return Storage.setItemAsync(KEYS.theme, value as string);
+    case 'profilePhotoUri':
+      if (typeof value === 'string') return Storage.setItemAsync(KEYS.profilePhotoUri, value);
+      return Storage.removeItem(KEYS.profilePhotoUri);
   }
 }
 
